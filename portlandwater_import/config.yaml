@@ -1,5 +1,5 @@
 name: Portland Water Import
-version: "0.1.0"
+version: "0.1.1"
 slug: portlandwater_import
 description: Pull Portland Water Bureau quarterly water usage + billed cost into Home Assistant long-term statistics.
 url: https://github.com/nburns/portlandwater-import
