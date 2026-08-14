@@ -12,6 +12,15 @@ imports two long-term statistics — spread evenly across each billing
 period so the Energy dashboard shows smooth daily bars instead of a
 spike every 3 months.
 
+## Data staleness
+
+Portland Water Bureau bills **quarterly** (~90 days per cycle), so a
+new data point only appears every 3 months when a bill is posted.
+Between cycles the add-on has nothing new to import. Expect data to
+trail real time by up to **~90 days**. The daily-spread logic makes
+each quarterly bill appear as smooth per-day bars in the Energy
+dashboard once it does arrive.
+
 ## Features
 
 - Automatic water import into HA long-term statistics.
