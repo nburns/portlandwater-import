@@ -21,6 +21,11 @@ trail real time by up to **~90 days**. The daily-spread logic makes
 each quarterly bill appear as smooth per-day bars in the Energy
 dashboard once it does arrive.
 
+Because of this lag, the HA Energy dashboard's default **Today** view
+will look empty — the newest data point is from the last posted bill,
+potentially up to 90 days ago. Change the range to **Month** or
+**Year** to see the imported bars.
+
 ## Features
 
 - Automatic water import into HA long-term statistics.
