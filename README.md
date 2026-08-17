@@ -53,6 +53,8 @@ Or manually:
    OR select **Use an entity tracking the total costs** and pick
    `portlandwater:water_cost` (real billed dollars).
 
+See [DOCS.md](portlandwater_import/DOCS.md) for the full options reference.
+
 ## Requirements
 
 - Home Assistant OS or Supervised (add-ons don't work on Container/Core).
