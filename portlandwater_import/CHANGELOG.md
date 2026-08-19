@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.4
+
+- Add add-on icon (128×128, light-blue semicircle with green conifers and a dark-blue fountain).
+
 ## 0.1.3
 
 - Wrap `page.goto` calls in `_goto_with_retry` (3 attempts, 5s/15s backoff)
