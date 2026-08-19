@@ -31,6 +31,39 @@ BILL_HREF_RE = re.compile(r"/css/billPrint/retrieve/(\d+)")
 
 log = logging.getLogger(__name__)
 
+_RETRYABLE_SUBSTRINGS = (
+    "ERR_NETWORK_CHANGED",
+    "ERR_INTERNET_DISCONNECTED",
+    "ERR_TIMED_OUT",
+    "ERR_CONNECTION_RESET",
+    "ERR_ABORTED",
+    "ERR_NAME_NOT_RESOLVED",
+)
+_RETRY_DELAYS = (5, 15)
+
+
+async def _goto_with_retry(
+    page: Page, url: str, *, tries: int = 3, wait_until: str = "networkidle"
+) -> None:
+    last_exc: Exception | None = None
+    for attempt in range(tries):
+        try:
+            await page.goto(url, wait_until=wait_until)
+            return
+        except Exception as exc:
+            msg = str(exc)
+            if not any(s in msg for s in _RETRYABLE_SUBSTRINGS):
+                raise
+            last_exc = exc
+            if attempt < len(_RETRY_DELAYS):
+                delay = _RETRY_DELAYS[attempt]
+                log.info(
+                    "goto %s failed with retryable error (%s); retrying in %ds",
+                    url, msg.splitlines()[0], delay,
+                )
+                await asyncio.sleep(delay)
+    raise last_exc  # type: ignore[misc]
+
 
 @dataclass
 class ScraperOptions:
@@ -93,7 +126,7 @@ class PortlandWaterScraper:
         return sorted(unique.values(), key=lambda b: b.period_start)
 
     async def _ensure_logged_in(self, page: Page) -> None:
-        await page.goto(TRANSACTIONS_URL, wait_until="networkidle")
+        await _goto_with_retry(page, TRANSACTIONS_URL)
         if "public/login" not in page.url:
             log.info("Session restored — already logged in")
             return
@@ -109,7 +142,7 @@ class PortlandWaterScraper:
         log.info("Logged in — landed on %s", page.url)
 
     async def _enumerate_bill_urls(self, page: Page) -> list[str]:
-        await page.goto(TRANSACTIONS_URL, wait_until="networkidle")
+        await _goto_with_retry(page, TRANSACTIONS_URL)
         hrefs = await page.eval_on_selector_all(
             "a[href*='/css/billPrint/retrieve/']",
             "els => els.map(a => a.href)",

@@ -1,7 +1,8 @@
 # AGENTS.md — portlandwater-import
 
-Home Assistant add-on that scrapes Portland Water's monthly gas-usage table
-into HA long-term statistics (consumption in ft³ + billed cost in USD).
+Home Assistant add-on that scrapes Portland Water Bureau's quarterly
+bill PDFs into HA long-term statistics (consumption in ft³ + billed
+cost in USD, both spread across each bill's days for smooth daily bars).
 
 ## Layout
 
@@ -24,7 +25,8 @@ into HA long-term statistics (consumption in ft³ + billed cost in USD).
     ├── pyproject.toml              uv-managed Python project
     ├── uv.lock
     ├── src/portlandwater_import/
-    │   ├── scraper.py              Playwright login + HTML table scrape
+    │   ├── scraper.py              Playwright login + bill-PDF download
+    │   ├── parser.py               pdftotext PDF parse → WaterBill rows
     │   ├── ha_client.py            HA WebSocket import_statistics client
     │   ├── state.py                /data/state.json bookkeeping
     │   └── __main__.py             CLI: --mode backfill|incremental
@@ -60,38 +62,47 @@ uv run --env-file .env python -m portlandwater_import --mode backfill
 
 ## Architecture notes
 
-**Why Playwright?** Portland Water's login is a standard email/password form
-posting to `identity.portlandwater.com` (OpenID Connect / .NET Identity
-Server). Scriptable in pure httpx, but the gas-usage table renders
-client-side. Simpler to drive a browser end-to-end.
+**Why Playwright?** PWB's login on `css.portlandoregon.gov` is a plain
+HTML form (`#username`, `#password`, `#submit`) that could be scripted
+with httpx, but the account transactions page + bill PDF downloads
+rely on session cookies that are easier to get by driving a real
+browser. We reuse the authenticated `BrowserContext` to fetch each
+PDF from `/css/billPrint/retrieve/<id>`.
 
-**Why HTML scrape, not "Download table"?** The `Download table` `<a>`
-has no href — it triggers a JS-built CSV blob download. Playwright's
-`expect_download` couldn't catch it reliably. The visible `<table>` is
-the same data, easier to scrape.
+**Why PDF parsing, not the portal UI?** The transactions page renders
+"Bill Print" links only — there's no usage table on the site itself.
+Actual water volume and billed dollars live inside the bill PDFs.
+`parser.py` shells out to `pdftotext -layout` and greps the resulting
+text for `Water Volume` + `Total Current Charges`.
 
-**Granularity.** Portland Water residential meters are AMR (drive-by, read
-monthly). The portal exposes *only* monthly-billing-cycle rows. No
-hourly / daily. Ceiling not fixable in software.
+**Granularity.** PWB bills quarterly (~90 days per cycle). A single
+PDF sometimes covers multiple billing periods when a bill spans a rate
+change or account event. `parser.py` splits those into separate
+`WaterBill` rows keyed by `(period_start, period_end)`.
 
-**Backfill horizon.** Portal claims up to 3 years. Default view shows
-~13 months; we set the From/To date range to `today − 3y → today` to
-get everything.
+**Backfill horizon.** `/css/account/accountTransaction` exposes 36
+months of transactions. We enumerate every "Bill Print" link on that
+page — no date-range widget needed.
 
-**Multi-account.** Some logins have multiple accounts (rental
-properties etc.). If `account_no` option is set, the scraper clicks the
-matching account tile before scraping.
+**Multi-account.** If `account_no` option is set, the scraper picks
+that account after login. Blank → accepts the portal's default account.
 
-**Units.** Portland Water bills in *therms*. HA Energy dashboard accepts
-ft³, m³, CCF, or kWh — not therms directly. We convert via
-`1 therm ≈ 100 ft³` (nominal 1000 BTU/ft³). Real heating value varies
-±1% and Portland Water doesn't publish per-bill factors.
+**Units.** PWB bills in **CCF** (hundred cubic feet, `1 CCF = 100 ft³`).
+HA's water device_class accepts `ft³`, `m³`, `gal`, `L`. We report as
+`ft³` (CCF × 100) so numbers stay recognizable and cost math against
+PWB's per-CCF rate is exact.
+
+**Daily-spread bars.** Since bills are quarterly, importing each bill
+as a single point would give a giant spike every 3 months. Instead
+`_bills_to_daily_entries` splits each bill's usage + cost evenly
+across the days it covers, so the Energy dashboard shows smooth daily
+bars.
 
 **HA long-term statistics.** External statistics require a
 `statistic_id` with a colon (e.g. `portlandwater:water_consumption`).
-`has_sum=true`, `state` = ft³ per interval, `sum` = cumulative ft³
-from an arbitrary epoch. Re-imports for the same `(statistic_id, start)`
-overwrite in place.
+`has_sum=true`, `state` = ft³ imported that day, `sum` = cumulative ft³
+from the start of the imported history. Re-imports for the same
+`(statistic_id, start)` overwrite in place.
 
 **Cumulative sum.** Backfill calls `recorder/clear_statistics` on both
 statistic_ids first so a partial prior import doesn't leave stale sums.
@@ -134,16 +145,18 @@ when cookies expire.
 
 ## Known gaps
 
-- Not yet deployed to a real HA instance for supervisor-side testing.
 - Multi-account picker code is best-guess based on the observed
-  "Account No: X" text — the picker widget may need a different click
-  target on some accounts.
-- Date-range expansion is a best-effort — the From/To inputs aren't
-  standard HTML5 date inputs. If the label-based locators change, we
-  silently fall back to the default view (~13 months).
+  account UI — the picker widget may need a different click target on
+  some accounts. If PWB changes the transactions-page layout, the
+  "Bill Print" link regex (`/css/billPrint/retrieve/<id>`) may need
+  updating.
+- PDF parser is regex-based against `pdftotext -layout` output. PWB's
+  bill template has been stable for years but any layout change would
+  need `parser.py` updates.
 
 ## Non-goals
 
-- Sub-monthly granularity — impossible without a hardware pulse counter
-  on the meter itself.
+- Sub-quarterly granularity — impossible; PWB reads meters manually
+  once per billing cycle. A hardware pulse counter on the meter would
+  be the only way to get finer resolution.
 - Portland Water business accounts — schema likely differs; untested.

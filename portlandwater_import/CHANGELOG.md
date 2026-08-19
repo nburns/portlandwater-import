@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.1.3
+
+- Wrap `page.goto` calls in `_goto_with_retry` (3 attempts, 5s/15s backoff)
+  to survive transient `ERR_NETWORK_CHANGED` and related Playwright errors at
+  container boot. Non-retryable errors and final failures re-raise immediately.
+- Convert "scraper returned no bills" from a WARNING + exit 0 to
+  `RuntimeError`, so the process exits nonzero and cron retries within the
+  hour rather than waiting ~24h for the next scheduled run.
+- Rewrite `README.md`, `DOCS.md`, and `AGENTS.md`. Previous versions
+  were copy-pasted from the sibling gas add-on and described the wrong
+  data source, wrong URL, wrong units, and wrong workflow. All three
+  now accurately describe the actual PDF-based scrape from
+  `css.portlandoregon.gov` with CCF → ft³ units and quarterly billing.
+
 ## 0.1.2
 
 - `run.sh` now prefixes its own log lines with a matching timestamp

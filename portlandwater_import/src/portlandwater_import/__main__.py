@@ -80,8 +80,7 @@ async def run(mode: str, *, data_dir: Path, opts: ScraperOptions, ha: HAClient,
         bills = await scraper.fetch_bills(data_dir / "downloads")
 
     if not bills:
-        log.warning("scraper returned no bills — nothing to import")
-        return
+        raise RuntimeError("scraper returned no bills - portal login or PDF parsing failed")
 
     bills.sort(key=lambda b: b.period_start)
     log.info("Parsed %d billing periods (%s → %s)",
