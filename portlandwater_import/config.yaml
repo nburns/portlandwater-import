@@ -1,5 +1,5 @@
 name: Portland Water Import
-version: "0.1.4"
+version: "0.2.0"
 slug: portlandwater_import
 description: Pull Portland Water Bureau quarterly water usage + billed cost into Home Assistant long-term statistics.
 url: https://github.com/nburns/portlandwater-import
@@ -29,8 +29,10 @@ uart: false
 kernel_modules: false
 full_access: false
 apparmor: true      # loads apparmor.txt
-ingress: false
+ingress: true
+ingress_port: 8099
 panel_icon: mdi:water
+panel_title: "Portland Water"
 options:
   username: ""
   password: ""
